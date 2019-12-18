@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -e
+
+if ! [[ -r "$HOME/opt/extract-ssl-secrets.jar" ]]; then
+	echo "Downloading extract-ssl-secrets.jar..."
+	mkdir -p "$HOME/opt"
+	wget -q -O "$HOME/opt/extract-ssl-secrets.jar" "https://repo1.maven.org/maven2/name/neykov/extract-ssl-secrets/2.0.0/extract-ssl-secrets-2.0.0.jar"
+	echo "    done"
+fi
+
+pid="$(java -jar "$HOME/opt/extract-ssl-secrets.jar" list | grep com.intellij.rt.execution.junit.JUnitStarter | cut -f3 -d' ')"
+
+if [[ -z "$pid" ]]; then
+	echo "Could not find Idea JUnitStarter" >&2
+	exit 1
+fi
+
+
+java -jar "$HOME/opt/extract-ssl-secrets.jar" "$pid" "$HOME/keys.ssl"
+
+echo "Dumped to $HOME/keys.ssl"

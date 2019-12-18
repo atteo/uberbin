@@ -1,0 +1,39 @@
+#!/bin/bash
+
+set -e
+
+function cleanup() {
+	ssh -S "$controlSocket" -O exit "$host" || true
+	rm "$configFile" || true
+	rm "${configFile}e" || true
+	rmdir "$tempDirectory" || true
+}
+
+trap "cleanup" EXIT
+
+tempDirectory="$(mktemp -d)"
+controlSocket="$tempDirectory/ssh.control"
+configFile="$tempDirectory/config"
+
+host="$1"
+shift
+
+echo "Downloading kubectl config..."
+# /etc/kubernetes/admin.conf
+scp -q "$host:.kube/config" "$configFile"
+
+randomPort="$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')"
+
+sed -rie "s,server:.*$,server: https://127.0.0.1:$randomPort,;s,certificate-authority-data:.*\$,insecure-skip-tls-verify: true," "$configFile"
+
+ssh -M -S "$controlSocket" -NTf -L "$randomPort:localhost:6443" "$host"
+
+export KUBECONFIG="$configFile"
+export DOCKER_MACHINE_NAME="k8s:$host"
+
+
+if [[ -z "$1" ]]; then
+	fish
+else
+	"$@"
+fi

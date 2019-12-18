@@ -1,0 +1,23 @@
+#!/bin/bash
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0"
+	echo ""
+	echo "Returns public IP address this machine is seen on."
+	echo "Ex:"
+	echo "	$0"
+}
+
+requiresCommand curl
+
+if (( $# != 0 )); then
+	printHelp
+	exit 0
+fi
+
+curl -s https://api.ipify.org
+#curl -s http://ipv4-only.webernetz.net

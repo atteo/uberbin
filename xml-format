@@ -1,0 +1,35 @@
+#!/bin/bash
+
+trap "exit 1" ERR
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0"
+	echo "$0 <file>"
+	echo "$0 <input-file> <output-file>"
+	echo ""
+	echo "Formats XML data"
+}
+
+if (( $# > 2 )); then
+	printHelp
+	exit 0
+fi
+
+requiresCommand xmllint
+
+export XMLLINT_INDENT="    "
+
+if (( $# == 0 )); then
+	xmllint --format -
+elif (( $# == 1 )); then
+	xmllint --format "$1" > "$1.formatted"
+	mv "$1.formatted" "$1"
+elif (( $# == 2 )); then
+	xmllint --format "$1" > "$2"
+fi
+

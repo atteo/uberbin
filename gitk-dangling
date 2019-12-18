@@ -1,0 +1,4 @@
+#!/bin/bash
+
+git fsck --no-reflogs --dangling  | grep commit | awk '{print $3}' | xargs gitk --all
+

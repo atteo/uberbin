@@ -1,0 +1,3 @@
+#!/bin/bash
+
+docker run -ti --rm --net=host --ipc=host --pid=host --privileged --log-driver=none alpine:3.8 nsenter -t 1 -m -u -n -i sh

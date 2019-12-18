@@ -1,0 +1,6 @@
+#!/bin/bash
+
+kubectl config set-context --current "--namespace=$1"
+
+export DOCKER_MACHINE_NAME="${DOCKER_MACHINE_NAME%%#}#$1"
+

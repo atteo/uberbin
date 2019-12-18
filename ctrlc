@@ -1,0 +1,21 @@
+#!/bin/bash
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0"
+	echo ""
+	echo "Stores standard input to the clipboard"
+}
+
+if (( $# != 0 )); then
+	printHelp
+	exit 0
+fi
+
+requiresCommand xclip
+
+xclip -selection c

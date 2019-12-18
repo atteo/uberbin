@@ -1,0 +1,32 @@
+#!/bin/bash
+
+function cleanup() {
+	ssh -S "$controlSocket" -O exit "$host"
+	rm "$dockerSocket"
+	rmdir "$tempDirectory"
+}
+
+trap "cleanup" EXIT
+
+tempDirectory="$(mktemp -d)"
+controlSocket="$tempDirectory/ssh.control"
+dockerSocket="$tempDirectory/docker.socket"
+
+host="$1"
+shift
+
+ssh -M -S "$controlSocket" -NTf -L "$dockerSocket:/var/run/docker.sock" "$host"
+
+export DOCKER_HOST="unix://$dockerSocket"
+export DOCKER_MACHINE_NAME="docker:$host"
+
+
+if [[ -z "$1" ]]; then
+	if [[ -x /usr/bin/fish ]]; then
+		fish
+	else
+		bash
+	fi
+else
+	"$@"
+fi
