@@ -2,4 +2,4 @@
 
 expression="${@:-port not 22}"
 
-docker run -i --rm --net=host --log-driver=none corfr/tcpdump -i any -w - "$expression" | wireshark -k -i -
+/usr/bin/docker run -i --rm --net=host --log-driver=none corfr/tcpdump -i any -w - "$expression" | wireshark -k -i -
