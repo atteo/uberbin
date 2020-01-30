@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# If it's stupid but it works, it isn't stupid.
+
+set -e
+
+if [[ "$1" == "--internal" ]]; then
+	internal="true"
+	shift
+fi
+
+container="$1"
+port="$2"
+
+
+if [[ "$internal" == "true" ]]; then
+	docker run --rm -i --log-driver=none "--net=container:$container" alpine/socat STDIO "TCP4:localhost:$port"
+else
+	socat TCP4-LISTEN:$port,reuseaddr,fork SYSTEM:"$0 --internal $container $port"
+fi
+
+
+
