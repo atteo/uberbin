@@ -10,13 +10,16 @@ if [[ "$1" == "--internal" ]]; then
 fi
 
 container="$1"
-port="$2"
+ports="$2"
+
+sourcePort="$(echo -n "$ports" | cut -d':' -f1)"
+destinationPort="$(echo -n "$ports" | cut -d':' -f2)"
 
 
 if [[ "$internal" == "true" ]]; then
-	docker run --rm -i --log-driver=none "--net=container:$container" alpine/socat STDIO "TCP4:localhost:$port"
+	docker run --rm -i --log-driver=none "--net=container:$container" alpine/socat STDIO "TCP4:localhost:$destinationPort"
 else
-	socat TCP4-LISTEN:$port,reuseaddr,fork SYSTEM:"$0 --internal $container $port"
+	socat TCP4-LISTEN:$sourcePort,reuseaddr,fork SYSTEM:"$0 --internal $container $destinationPort"
 fi
 
 
