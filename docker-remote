@@ -15,7 +15,7 @@ dockerSocket="$tempDirectory/docker.socket"
 host="$1"
 shift
 
-ssh -M -S "$controlSocket" -NTf -L "$dockerSocket:/var/run/docker.sock" "$host"
+ssh -M -S "$controlSocket" -NTf -L "$dockerSocket:/var/run/docker.sock" "$host" || exit 1
 
 export DOCKER_HOST="unix://$dockerSocket"
 export DOCKER_MACHINE_NAME="docker:$host"
