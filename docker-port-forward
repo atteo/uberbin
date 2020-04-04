@@ -2,6 +2,24 @@
 
 # If it's stupid but it works, it isn't stupid.
 
+cleanup() {
+	if [[ ! -z "$socatPid" ]]; then
+		kill "$socatPid"
+		wait "$socatPid"
+	fi
+}
+
+trap cleanup EXIT
+
+if [[ -z "$1" ]]; then
+	echo "$0 container sourcePort:destinationPort [command [options...]]"
+	echo ""
+	echo "Forward port from sourcePort on localhost to destinationPort located inside a given container."
+	echo "Optionally a command might be provided which will be called when tunnel is open. The tunel will be closed"
+	echo "when command finishes"
+	exit 1
+fi
+
 set -e
 
 if [[ "$1" == "--internal" ]]; then
@@ -12,6 +30,9 @@ fi
 container="$1"
 ports="$2"
 
+shift
+shift
+
 sourcePort="$(echo -n "$ports" | cut -d':' -f1)"
 destinationPort="$(echo -n "$ports" | cut -d':' -f2)"
 
@@ -19,8 +40,16 @@ destinationPort="$(echo -n "$ports" | cut -d':' -f2)"
 if [[ "$internal" == "true" ]]; then
 	docker run --rm -i --log-driver=none "--net=container:$container" alpine/socat STDIO "TCP4:localhost:$destinationPort"
 else
-	socat TCP4-LISTEN:$sourcePort,reuseaddr,fork SYSTEM:"$0 --internal $container $destinationPort"
-fi
+	socat TCP4-LISTEN:$sourcePort,reuseaddr,fork SYSTEM:"$0 --internal $container $destinationPort" &
+	socatPid="$!"
 
+	if [[ -z "$1" ]]; then
+		sleep infinity
+	else
+		"$@"
+		sleep 1 # wait for forked Docker container to finish to prevent socat error
+	fi
+
+fi
 
 
