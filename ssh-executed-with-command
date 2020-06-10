@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# This script is meant to be used from within ssh_config.
+#
+# It fixes weird behavior of SSH where it returns error when executing
+# command from command line while RemoteCommand was used in configuration file
+# for this host, like this:
+#
+# Host pirx
+#     RemoteCommand fish
+#     RequestTTY yes
+#
+# Such configuration results in error when execuing remote command:
+# #> ssh pirx ls                                                                                                                                                                     śro, 10 cze 2020, 11:26:07
+# Cannot execute command-line and remote command.
+#
+# To fix this behavior simply add the following to your .ssh/config or /etc/ssh/ssh_config file:
+#
+# Match exec "ssh-executed-with-command"
+#     RemoteCommand none
+#     RequestTTY auto
+#
+
+if [[ -z "$1" ]]; then
+	exec xargs -0 "$0" < /proc/$PPID/cmdline
+fi
+
+shift
+
+unrecognizedOptions=0
+while getopts 46AaCfGgKkMNnqsTtVvXxYyB:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w: FLAG; do
+	case $FLAG in
+		\?|:)
+			(( unrecognizedOptions++ ))
+			;;
+		*)
+			;;
+	esac
+done
+
+
+if (( unrecognizedOptions > 0 )) || (( $# > 1 )); then
+	exit 0
+fi
+
+exit 1
