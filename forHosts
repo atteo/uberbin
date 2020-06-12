@@ -1,0 +1,29 @@
+#!/bin/bash
+
+sshHosts="$(grep -E '^\s*Host(\s+([a-z0-9-]+))+$' ~/.ssh/config | sed -re's,^\s*Host\s+,,' | sed -re 's, ,\n,')"
+
+filteredHosts="$(echo "$sshHosts" | grep -E "$1")"
+
+if [[ -z "$filteredHosts" ]]; then
+	echo "Error: Hosts not found" >&2
+	exit 1
+fi
+
+shift
+
+forAll $filteredHosts -- "$*"
+
+
+# declare -a params
+# for host in $filteredHosts; do
+# 
+# 	if echo -n "$*" | grep -F " HOST" > /dev/null; then
+# 		command="$(echo -n "$*" | sed -re "s, HOST, $host,g")"
+# 	else
+# 		command="$* $host"
+# 	fi
+# 
+# 	params+=("$command")
+# done
+# 
+# tmux-many "${params[@]}"

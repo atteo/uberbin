@@ -1,0 +1,38 @@
+#!/bin/bash
+
+declare -a params
+
+
+if [[ "$1" == "-i" ]]; then
+	if ifs= read -r line; then
+		params+=(new-session "$line" ';')
+	fi
+	if ifs= read -r line; then
+		params+=(split-window -h "$line" ';')
+	fi
+	while ifs= read -r line; do
+		params+=(split-window -v "$line" ';')
+	done
+
+else
+
+	params+=(new-session "$1" ';')
+	shift
+
+	if ! [[ -z "$1" ]]; then
+		params+=(split-window -h "$1" ';')
+		shift
+	fi
+
+	while ! [[ -z "$1" ]]; do
+		params+=(split-window -v "$1" ';')
+		shift
+	done
+fi
+
+#params+=(set remain-on-exit on ';')
+
+tmux "${params[@]}"
+
+
+

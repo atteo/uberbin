@@ -1,0 +1,31 @@
+#!/bin/bash
+
+declare -a elements
+while [[ -n "$1" ]]; do
+	# elements can be separated from commands using '--'
+	if [[ "$1" == "--" ]]; then
+		shift
+		break
+	fi
+
+	# if '--' is not used then last parameter is treated as command
+	if (( $# == 1 )); then
+		break;
+	fi
+
+	elements+=("$1")
+	shift
+done
+
+declare -a params
+for element in "${elements[@]}"; do
+
+	if echo -n "$*" | grep -F "{}" > /dev/null; then
+		command="$(echo -n "$*" | sed -re "s,\\{\\},$element,g")"
+	else
+		command="$* $element"
+	fi
+	params+=("$command")
+done
+
+tmuxMany "${params[@]}"
