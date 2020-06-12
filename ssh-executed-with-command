@@ -22,7 +22,16 @@
 #
 
 if [[ -z "$1" ]]; then
-	exec xargs -0 "$0" < /proc/$PPID/cmdline
+	pid=$PPID
+
+	while [[ "$(cat /proc/$pid/comm)" != "ssh" ]]; do
+		pid="$(ps -o ppid= $pid)"
+		if (( pid == 0 )); then
+			exit 0
+		fi
+	done
+
+	exec xargs -0 "$0" < /proc/$pid/cmdline
 fi
 
 shift
