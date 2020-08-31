@@ -1,5 +1,28 @@
 #!/bin/bash
 
+
+network="host"
+interface="any"
+
+
+while getopts ":n:i:" opt; do
+  case ${opt} in
+    n)
+      network=$OPTARG
+      ;;
+    i)
+      interface=$OPTARG
+      ;;
+    \?)
+      echo "Invalid option: $OPTARG" 1>&2
+      ;;
+    :)
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
 expression="${@:-port not 22}"
 
-/usr/bin/docker run -i --rm --net=host --log-driver=none corfr/tcpdump -i any -w - "$expression" | wireshark -k -i -
+/usr/bin/docker run -i --rm "--net=$network" --log-driver=none corfr/tcpdump -i "$interface" -w - "$expression" | wireshark -k -i -
