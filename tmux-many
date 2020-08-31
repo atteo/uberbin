@@ -2,8 +2,14 @@
 
 declare -a params
 
+if [[ "$1" == "-w" ]]; then
+	wait="true"
+	shift
+fi
+
 
 if [[ "$1" == "-i" ]]; then
+	# Run each input line in separate window
 	if ifs= read -r line; then
 		params+=(new-session "$line" ';')
 	fi
@@ -15,12 +21,18 @@ if [[ "$1" == "-i" ]]; then
 	done
 
 else
+	# Run each parameter in separate window
 
 	params+=(new-session "$1" ';')
 	shift
 
 	if ! [[ -z "$1" ]]; then
-		params+=(split-window -h "$1" ';')
+		params+=(split-window -v "$1" ';')
+		shift
+	fi
+
+	if ! [[ -z "$1" ]]; then
+		params+=(split-window -fh "$1" ';')
 		shift
 	fi
 
@@ -30,7 +42,9 @@ else
 	done
 fi
 
-#params+=(set remain-on-exit on ';')
+if [[ "$wait" == "true" ]]; then
+	params+=(set remain-on-exit on ';')
+fi
 
 tmux "${params[@]}"
 

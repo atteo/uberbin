@@ -12,18 +12,3 @@ fi
 shift
 
 forAll $filteredHosts -- "$*"
-
-
-# declare -a params
-# for host in $filteredHosts; do
-# 
-# 	if echo -n "$*" | grep -F " HOST" > /dev/null; then
-# 		command="$(echo -n "$*" | sed -re "s, HOST, $host,g")"
-# 	else
-# 		command="$* $host"
-# 	fi
-# 
-# 	params+=("$command")
-# done
-# 
-# tmux-many "${params[@]}"
