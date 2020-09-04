@@ -1,0 +1,10 @@
+#!/bin/bash
+
+nmcli -t -f DEVICE dev | while read DEVICE; do
+	echo -n "$DEVICE: "
+	nmcli device show "$DEVICE" | grep -e "^GENERAL\.STATE:" | sed -re 's,^[^:]+:\s+,,' | tr '\n' ' '
+	nmcli device show "$DEVICE" | grep -e "^IP4\.DNS" | sed -re 's,^[^:]+:\s+,,' | tr '\n' ' '
+	echo ""
+done
+
+
