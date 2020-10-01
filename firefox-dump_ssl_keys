@@ -1,0 +1,5 @@
+#!/bin/bash
+
+export SSLKEYLOGFILE=$HOME/keys.ssl
+
+firefox
