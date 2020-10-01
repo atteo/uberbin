@@ -11,4 +11,9 @@ fi
 
 shift
 
-forAll $filteredHosts -- "$*"
+if [[ -z "$1" ]]; then
+	for-all $filteredHosts -- "ssh"
+else
+	for-all $filteredHosts -- "$*"
+fi
+
