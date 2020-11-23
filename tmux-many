@@ -1,46 +1,90 @@
 #!/bin/bash
 
+
+set -o errexit -o noclobber -o nounset -o pipefail
+
+params="$(getopt -o wil: -l wait,layout:,titles: --name "$0" -- "$@")"
+eval set -- "$params"
+unset params
+
+layout="main-horizontal"
+read_stdin="false"
+wait="false"
+titles=""
+
+while true
+do
+    case "$1" in
+        -w|--wait)
+            wait="true"
+            shift
+            ;;
+        -i)
+            read_stdin="true"
+            shift 2
+            ;;
+		-l|--layout)
+			layout="$2"
+            shift 2
+			;;
+		--titles)
+			titles="$2"
+			shift 2
+			;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Not implemented: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
 declare -a params
 
-if [[ "$1" == "-w" ]]; then
-	wait="true"
-	shift
-fi
+IFS=',' read -r -a titles <<< "$titles"
 
+#params+=(set-option -g remain-on-exit on ';')
 
-if [[ "$1" == "-i" ]]; then
-	# Run each input line in separate window
-	if ifs= read -r line; then
-		params+=(new-session "$line" ';')
+params+=(set -g pane-border-status bottom ';' set -g pane-border-format "#{pane_title}" ';')
+
+paneCount=0
+
+function add_pane() {
+	local command="$1"
+	local action
+
+	if (( paneCount == 0 )); then
+		action="new-session"
+	else
+		action="split-window"
 	fi
-	if ifs= read -r line; then
-		params+=(split-window -h "$line" ';')
+
+	(( ++paneCount ))
+
+	params+=($action "$command" ';')
+
+	if ! [[ -z "${titles[$paneCount]-}" ]]; then
+		params+=(select-pane -T "${titles[$paneCount]}" ';')
 	fi
+
+}
+
+if [[ "$read_stdin" == "true" ]]; then
 	while ifs= read -r line; do
-		params+=(split-window -v "$line" ';')
+		add_pane "$line"
 	done
-
 else
 	# Run each parameter in separate window
-
-	params+=(new-session "$1" ';')
-	shift
-
-	if ! [[ -z "$1" ]]; then
-		params+=(split-window -v "$1" ';')
-		shift
-	fi
-
-	if ! [[ -z "$1" ]]; then
-		params+=(split-window -fh "$1" ';')
-		shift
-	fi
-
-	while ! [[ -z "$1" ]]; do
-		params+=(split-window -v "$1" ';')
+	while ! [[ -z "${1-}" ]]; do
+		add_pane "$1"
 		shift
 	done
 fi
+
+params+=( select-layout $layout ';' )
 
 if [[ "$wait" == "true" ]]; then
 	params+=(set remain-on-exit on ';')
