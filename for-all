@@ -28,4 +28,4 @@ for element in "${elements[@]}"; do
 	params+=("$command")
 done
 
-tmux-many "${params[@]}"
+tmux-many --titles "$(printf ",%s" "${elements[@]}")" "${params[@]}"
