@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -o errexit -o noclobber -o nounset -o pipefail
+filter="$1"
+
+pods="$(kubectl get pods -o jsonpath="{range .items[*]}{.metadata.name}{'\n'}{end}" | grep "$filter")"
+readarray -t pods <<< "$pods"
+
+read_containers() {
+	local pod="$1"
+
+	containers="$(kubectl get pod "$pod" -o "jsonpath={range .spec.containers[*]}{.name}{'\\n'}{end}" | grep -vF "istio-proxy")"
+	readarray -t containers <<< "$containers"
+}
+
+
+if (( ${#pods[@]} < 1 )); then
+	echo "No pods found"
+elif (( ${#pods[@]} == 1 )); then
+
+	read_containers "${pods[0]}"
+
+	kubectl logs --since 48h -f "${pods[0]}" -c "${containers[0]}"
+else
+	for-all "${pods[@]}" -- kube-logs
+fi
