@@ -3,10 +3,10 @@
 set -e
 
 function cleanup() {
-	ssh -S "$controlSocket" -O exit "$host" || true
-	rm "$configFile" || true
-	rm "${configFile}e" || true
-	rmdir "$tempDirectory" || true
+	ssh -S "$controlSocket" -O exit "$host" > /dev/null 2>&1 || true
+	rm "$configFile" > /dev/null 2>&1 || true
+	rm "${configFile}e" > /dev/null 2>&1 || true
+	rmdir "$tempDirectory" > /dev/null 2>&1 || true
 }
 
 trap "cleanup" EXIT
@@ -14,6 +14,11 @@ trap "cleanup" EXIT
 tempDirectory="$(mktemp -d)"
 controlSocket="$tempDirectory/ssh.control"
 configFile="$tempDirectory/config"
+
+if [[ -z "$1" ]]; then
+	echo "Usage: $0 <server-name>"
+	exit 1
+fi
 
 host="$1"
 shift
