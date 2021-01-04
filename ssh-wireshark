@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+host="$1"
+
+shift
+
+expression="${@:-port not 22}"
+
+ssh "$host" "sudo tcpdump -i any -w - \"$expression\"" | wireshark -k -i -
