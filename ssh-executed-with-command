@@ -10,7 +10,7 @@
 #     RemoteCommand fish
 #     RequestTTY yes
 #
-# Such configuration results in error when execuing remote command:
+# Such configuration results in error when executing remote command:
 # #> ssh pirx ls                                                                                                                                                                     śro, 10 cze 2020, 11:26:07
 # Cannot execute command-line and remote command.
 #
@@ -24,8 +24,9 @@
 if [[ -z "$1" ]]; then
 	pid=$PPID
 
-	while [[ "$(cat /proc/$pid/comm)" != "ssh" ]]; do
+	while [[ "$(cat "/proc/$pid/comm")" != "ssh" ]]; do
 		pid="$(ps -o ppid= $pid)"
+		pid="${pid//[[:blank:]]/}"
 		if (( pid == 0 )); then
 			exit 0
 		fi
