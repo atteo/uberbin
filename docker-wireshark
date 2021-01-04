@@ -25,4 +25,12 @@ shift $((OPTIND -1))
 
 expression="${@:-port not 22}"
 
-/usr/bin/docker run -i --rm "--net=$network" --log-driver=none corfr/tcpdump -i "$interface" -w - "$expression" | wireshark -k -i -
+id="$(uuidgen)"
+
+/usr/bin/docker run -l id="id=$id" -i --rm "--net=$network" --log-driver=none corfr/tcpdump -i "$interface" -w - "$expression" | wireshark -k -i -
+
+container="$(/usr/bin/docker ps -q --filter "label=id=$id")"
+
+if [[ -n "$container" ]]; then
+	/usr/bin/docker stop "$container"
+fi
