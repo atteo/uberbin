@@ -2,6 +2,7 @@
 
 set -o errexit -o noclobber -o nounset -o pipefail
 filter="$1"
+shift
 
 pods="$(kubectl get pods -o jsonpath="{range .items[*]}{.metadata.name}{'\n'}{end}" | grep "$filter")"
 readarray -t pods <<< "$pods"
@@ -20,7 +21,7 @@ elif (( ${#pods[@]} == 1 )); then
 
 	read_containers "${pods[0]}"
 
-	kubectl logs --since 48h -f "${pods[0]}" -c "${containers[0]}"
+	kubectl logs --since 48h -f "${pods[0]}" -c "${containers[0]}" "$@"
 else
-	for-all "${pods[@]}" -- kube-logs
+	for-all "${pods[@]}" -- kube-logs "{}" "$@"
 fi
