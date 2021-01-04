@@ -1,0 +1,22 @@
+#!/bin/bash
+
+trap "exit 1" ERR
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0 <hostname>"
+	echo ""
+	echo "Scans given hostname for available services using nmap"
+}
+
+if (( $# != 1 )); then
+	printHelp
+	exit 0
+fi
+
+requiresCommand nmap
+nmap -Pn "$@"
