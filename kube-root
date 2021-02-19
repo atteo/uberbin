@@ -1,0 +1,12 @@
+#!/bin/bash
+
+kubectl run -ti --image alpine:3.8 --rm --privileged --restart=Never --overrides='
+{
+  "apiVersion": "v1",
+  "spec": {
+	"hostIPC": true,
+	"hostNetwork": true,
+	"hostPID": true
+  }
+}
+' nginx --command -- nsenter -t 1 -m -u -n -i -- bash -l
