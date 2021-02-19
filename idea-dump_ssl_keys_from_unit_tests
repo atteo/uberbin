@@ -9,7 +9,7 @@ if ! [[ -r "$HOME/opt/extract-ssl-secrets.jar" ]]; then
 	echo "    done"
 fi
 
-pid="$(java -jar "$HOME/opt/extract-ssl-secrets.jar" list | grep com.intellij.rt.execution.junit.JUnitStarter | cut -f3 -d' ')"
+pid="$(java -jar "$HOME/opt/extract-ssl-secrets.jar" list | grep com.intellij.rt.junit.JUnitStarter | cut -f3 -d' ')"
 
 if [[ -z "$pid" ]]; then
 	echo "Could not find Idea JUnitStarter" >&2
