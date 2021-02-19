@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -e
+
+function cleanup() {
+	rm "$configFile" > /dev/null 2>&1 || true
+	rm "${configFile}e" > /dev/null 2>&1 || true
+	rmdir "$tempDirectory" > /dev/null 2>&1 || true
+}
+
+trap "cleanup" EXIT
+
+tempDirectory="$(mktemp -d)"
+configFile="$tempDirectory/config"
+
+if [[ -z "$1" ]]; then
+	echo "Usage: $0 <resourceGroup> (<cluster>)"
+	exit 1
+fi
+
+resourceGroup="$1"
+
+if [[ -z "$2" ]]; then
+	cluster="$1"
+else
+	cluster="$2"
+	shift
+fi
+
+shift
+
+echo "Downloading kubectl config..."
+
+az aks get-credentials --name "$cluster" --resource-group "$resourceGroup" --file - > "$configFile"
+subscriptionName="$(az account show -o json | jq -r '.name')"
+
+export KUBECONFIG="$configFile"
+export DOCKER_MACHINE_NAME="k8s:$subscriptionName:$cluster"
+
+
+if [[ -z "$1" ]]; then
+	fish
+else
+	"$@"
+fi
