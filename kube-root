@@ -9,4 +9,4 @@ kubectl run -ti --image alpine:3.8 --rm --privileged --restart=Never --overrides
 	"hostPID": true
   }
 }
-' nginx --command -- nsenter -t 1 -m -u -n -i -- bash -l
+' root --command -- nsenter -t 1 -m -u -n -i -- bash -l
