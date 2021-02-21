@@ -1,12 +1,27 @@
 #!/bin/bash
 
-kubectl run -ti --image alpine:3.8 --rm --privileged --restart=Never --overrides='
+host="$1"
+
+json='
 {
   "apiVersion": "v1",
   "spec": {
 	"hostIPC": true,
 	"hostNetwork": true,
 	"hostPID": true
+';
+
+if ! [[ -z "$host" ]]; then
+	json+=",
+	\"nodeSelector\" : {
+	  \"kubernetes.io/hostname\" : \"$host\"
+	}
+    ";
+fi
+
+json+='
   }
 }
-' root --command -- nsenter -t 1 -m -u -n -i -- bash -l
+'
+
+kubectl run -ti --image alpine:3.8 --rm --privileged --restart=Never --overrides="$json" root --command -- nsenter -t 1 -m -u -n -i -- bash -l
