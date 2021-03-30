@@ -48,7 +48,7 @@ IFS=',' read -r -a titles <<< "$titles"
 
 #params+=(set-option -g remain-on-exit on ';')
 
-params+=(set -g pane-border-status bottom ';' set -g pane-border-format "#{pane_title}" ';')
+#params+=(set pane-border-status bottom ';' set pane-border-format "#{pane_title}" ';')
 
 paneCount=0
 
