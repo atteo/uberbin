@@ -32,6 +32,7 @@ shift
 echo "Downloading kubectl config..."
 
 az aks get-credentials --name "$cluster" --resource-group "$resourceGroup" --file - > "$configFile"
+chmod 600 "$configFile"
 subscriptionName="$(az account show -o json | jq -r '.name')"
 
 export KUBECONFIG="$configFile"
