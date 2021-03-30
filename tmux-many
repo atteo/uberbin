@@ -57,14 +57,21 @@ function add_pane() {
 	local action
 
 	if (( paneCount == 0 )); then
-		action="new-session"
+		if [[ -z "${TMUX:-}" ]]; then
+			action="new-session"
+		else
+			action=""
+			exec="$command"
+		fi
 	else
 		action="split-window"
 	fi
 
 	(( ++paneCount ))
 
-	params+=($action "$command" ';')
+	if [[ -n "$action" ]]; then
+		params+=($action "$command" ';')
+	fi
 
 	if ! [[ -z "${titles[$paneCount]-}" ]]; then
 		params+=(select-pane -T "${titles[$paneCount]}" ';')
@@ -92,5 +99,7 @@ fi
 
 tmux "${params[@]}"
 
-
+if [[ -n "$exec" ]]; then
+	exec ${exec}
+fi
 
