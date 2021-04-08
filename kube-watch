@@ -1,0 +1,44 @@
+#!/bin/bash
+
+set -e 
+
+green='\033[0;32m'
+reset='\033[0m'
+
+green() {
+    echo -ne "${green}"
+    echo "$@"
+    echo -ne "${reset}"
+}
+
+namespace="$1"
+
+if [[ -z "$namespace" ]]; then
+    export namespaceParam="-A"
+else
+    export namespaceParam="-n $namespace"
+fi
+
+while IFS= read -r line; do
+
+    echo "$line"
+
+    read type reason object subobject message < <( echo "$line" )
+
+    if [[ "$reason" == "BackOff" ]]; then
+        if [[ "$subobject" == "spec.initContainers{"* ]]; then
+            container="$(echo "$subobject" | sed -re 's,^spec.initContainers\{([^\})]+)\}$,\1,')"
+            green "Showing log for pod $object init container $container"
+            kubectl -n "$namespace" logs "$object" -c "$container"
+        elif [[ "$subobject" == "spec.containers{"* ]]; then
+            container="$(echo "$subobject" | sed -re 's,^spec.containers\{([^\})]+)\}$,\1,')"
+            green "Showing log for pod $object container $container"
+            kubectl -n "$namespace" logs "$object" -c "$container"
+        fi
+    fi
+done < <(kubectl get events $namespaceParam \
+    -o custom-columns=TYPE:.type,REASON:.reason,OBJECT:.involvedObject.name,SUBOBJECT:.involvedObject.fieldPath,MESSAGE:.message \
+    -w --watch-only=true )
+
+
+
