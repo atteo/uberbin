@@ -14,20 +14,36 @@ tempDirectory="$(mktemp -d)"
 configFile="$tempDirectory/config"
 
 if [[ -z "$1" ]]; then
-	echo "Usage: $0 <resourceGroup> (<cluster>)"
-	exit 1
-fi
+	groupsJson="$(az group list --query "[? !starts_with(name,'MC') && name!='NetworkWatcherRG'].name" -o json)"
+	groupCount="$(echo "$groupsJson" | jq ". | length")"
 
-resourceGroup="$1"
-
-if [[ -z "$2" ]]; then
-	cluster="$1"
+	if [[ "$groupCount" == 1 ]]; then
+		resourceGroup="$(echo "$groupsJson" | jq -r ".[0]")"
+	else
+		echo "Please select resource group. Multiple resource groups available: $(echo "$groupsJson" | jq -r ". | join(\", \")")."
+		echo "Usage: $0 [<resourceGroup>] [<cluster>]"
+		exit 1
+	fi
 else
-	cluster="$2"
+	resourceGroup="$1"
 	shift
 fi
 
-shift
+if [[ -z "$1" ]]; then
+	clustersJson="$(az aks list -o json --query [].name)"
+	clusterCount="$(echo "$clustersJson" | jq ". | length")"
+
+	if [[ "$clusterCount" == 1 ]]; then
+		cluster="$(echo "$clustersJson" | jq -r ".[0]")"
+	else
+		echo "Please select cluster. Multiple AKS clusters available: $(echo "$clustersJson" | jq -r ". | join(\", \")")."
+		echo "Usage: $0 [<resourceGroup>] [<cluster>]"
+		exit 1
+	fi
+else
+	cluster="$1"
+	shift
+fi
 
 echo "Downloading kubectl config..."
 
