@@ -35,9 +35,12 @@ if [[ -z "$1" ]]; then
 
 	if [[ "$clusterCount" == 1 ]]; then
 		cluster="$(echo "$clustersJson" | jq -r ".[0]")"
+	elif [[ "$clusterCount" == 0 ]]; then
+		echo >&2 "No AKS clusters found"
+		exit 1
 	else
-		echo "Please select cluster. Multiple AKS clusters available: $(echo "$clustersJson" | jq -r ". | join(\", \")")."
-		echo "Usage: $0 [<resourceGroup>] [<cluster>]"
+		echo >&2 "Please select cluster. Multiple AKS clusters available: $(echo "$clustersJson" | jq -r ". | join(\", \")")."
+		echo >&2 "Usage: $0 [<resourceGroup>] [<cluster>]"
 		exit 1
 	fi
 else
