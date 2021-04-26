@@ -1,6 +1,12 @@
 #!/bin/bash
 
-kubectl config set-context --current "--namespace=$1"
+namespace="$1"
 
-export DOCKER_MACHINE_NAME="${DOCKER_MACHINE_NAME%%#}#$1"
+if [[ -z "$namespace" ]]; then
+	kubectl get namespaces
+	exit 1
+fi
+
+kubectl config set-context --current "--namespace=$namespace"
+export DOCKER_MACHINE_NAME="${DOCKER_MACHINE_NAME%%#}#$namespace"
 
