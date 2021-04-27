@@ -28,11 +28,14 @@ echo "Downloading kubectl config..."
 scp -q "$host:.kube/config" "$configFile"
 chmod 600 "$configFile"
 
+serverLine="$(cat "$configFile" | grep -F "server:")"
+remoteServer="${serverLine##*https://}"
+
 randomPort="$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')"
 
 sed -rie "s,server:.*$,server: https://127.0.0.1:$randomPort,;s,certificate-authority-data:.*\$,insecure-skip-tls-verify: true," "$configFile"
 
-ssh -M -S "$controlSocket" -NTf -L "$randomPort:localhost:6443" "$host"
+ssh -M -S "$controlSocket" -NTf -L "$randomPort:$remoteServer" "$host"
 
 export KUBECONFIG="$configFile"
 export DOCKER_MACHINE_NAME="k8s:$host"
