@@ -7,7 +7,8 @@ params="$(getopt -o wil: -l wait,layout:,titles: --name "$0" -- "$@")"
 eval set -- "$params"
 unset params
 
-layout="main-horizontal"
+#layout="main-horizontal"
+layout=""
 read_stdin="false"
 wait="false"
 titles=""
@@ -91,7 +92,9 @@ else
 	done
 fi
 
-params+=( select-layout $layout ';' )
+if [[ -n "$layout" ]]; then
+	params+=( select-layout $layout ';' )
+fi
 
 if [[ "$wait" == "true" ]]; then
 	params+=(set remain-on-exit on ';')
