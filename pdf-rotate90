@@ -1,0 +1,24 @@
+#!/bin/bash
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0 <input_file> <output_file>"
+	echo ""
+	echo "Rotates PDF file 90 degress."
+	echo "Usage:"
+	echo "$0 input.pdf output.pdf"
+	exit 0
+}
+
+if [[ "$1" == "--help" || "$1" == "-h" ]] || (( $# != 2 )); then
+	printHelp
+	exit 0
+fi
+
+requiresCommand pdftk
+
+pdftk "$1" cat 1-endeast output "$2"
