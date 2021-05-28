@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+# handle non-option arguments
+if [[ $# -ne 1 ]]; then
+    echo "$0: Certificate name required"
+	echo ""
+	echo "Use -h to see more info"
+    exit 4
+fi
+
+certName="$1"
+
+configFile="${certName}.config"
+keyFile="${certName}-key.pem"
+certRequestFile="${certName}-certreq.pem"
+
+if ! [[ -r "$configFile" ]]; then
+	cat > "$configFile" <<-EOF
+	[ req ]
+	default_bits           = 2048
+	distinguished_name     = req_distinguished_name
+	attributes             = req_attributes
+	prompt                 = no
+	output_password        =
+	utf8                   = yes
+
+	[ req_distinguished_name ]
+	C                      = Country
+	ST                     = State or Province
+	L                      = Locality
+	O                      = Organization Name
+	OU                     = Organizational Unit Name
+	CN                     = Common Name
+	emailAddress           = test@email.address
+
+	[ req_attributes ]
+
+	EOF
+
+	echo >&2 "Created '$configFile'. Please fill it with required values and rerun the command"
+
+	exit 1
+fi
+
+openssl req -new \
+	-config "$configFile" \
+	-nodes \
+	-newkey rsa > "$certRequestFile" \
+	-keyout "$keyFile"
+

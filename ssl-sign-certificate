@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+# handle non-option arguments
+if [[ $# -ne 2 ]]; then
+    echo "$0: CA name and certificate name required"
+	echo ""
+	echo "Use -h to see more info"
+    exit 4
+fi
+
+caName="$1"
+certificateName="$2"
+
+openssl x509 -req -in "$certificateName-certreq.pem" -days 1000 -CA "$caName-cert.pem" -CAkey "$caName-key.pem" -CAcreateserial > "$certificateName-cert.pem"

@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+# set default values
+outFile="defaultOutFile"
+
+# arguments parsing
+OPTIONS=h
+LONGOPTS=help
+
+! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    exit 2
+fi
+eval set -- "$PARSED"
+
+while true; do
+    case "$1" in
+        -h|--help)
+			echo "Export certificate to pfx format"
+			echo "$0 <cert name or file>"
+			echo ""
+			exit 1
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+
+# handle non-option arguments
+if [[ $# -ne 1 ]]; then
+    echo "$0: A certificate name is required."
+	echo ""
+	echo "Use -h to see more info"
+    exit 4
+fi
+
+certName="$1"
+
+openssl pkcs12 -export -in "$certName-cert.pem" -inkey "$certName-key.pem" -out "$certName.pfx"

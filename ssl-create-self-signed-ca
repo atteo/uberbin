@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+# default values
+daysValid="$((10 * 365))"
+
+# arguments parsing
+options=hd:
+longOptions=hdays:
+
+! parsed=$(getopt --options=$options --longoptions=$longOptions --name "$0" -- "$@")
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    exit 2
+fi
+eval set -- "$parsed"
+
+while true; do
+    case "$1" in
+        -h|--help)
+			echo "Create self signed certificate"
+			echo "$0 [-d <days>] <ca-name>"
+			echo ""
+			echo "-d | --days file - numer of days"
+			exit 1
+            ;;
+        -d|--days)
+            daysValid="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+if [[ $# -ne 1 ]]; then
+    echo "$0: CA name required"
+	echo ""
+	echo "Use -h to see more info"
+    exit 4
+fi
+
+caName="$1"
+
+configFile="$caName.config"
+
+if ! [[ -r "$configFile" ]]; then
+	cat > "$configFile" <<-EOF
+	[ req ]
+	default_bits           = 2048
+	distinguished_name     = req_distinguished_name
+	attributes             = req_attributes
+	prompt                 = no
+	output_password        =
+	utf8                   = yes
+
+	[ req_distinguished_name ]
+	C                      = Country
+	ST                     = State or Province
+	L                      = Locality
+	O                      = Organization Name
+	OU                     = Organizational Unit Name
+	CN                     = Common Name
+	emailAddress           = test@email.address
+
+	[ req_attributes ]
+
+	EOF
+
+	echo >&2 "Created '$configFile'. Please fill it with required values and rerun the command"
+
+	exit 0
+fi
+
+openssl req -new \
+	-x509 \
+	-config "$configFile" \
+	-nodes \
+	-days "$daysValid" \
+	-newkey rsa \
+	-keyout "$caName-key.pem"  > "$caName-cert.pem"
