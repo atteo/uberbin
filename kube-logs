@@ -1,27 +1,112 @@
 #!/bin/bash
 
-set -o errexit -o noclobber -o nounset -o pipefail
+function cleanup {
+	pkill -P $$
+	wait
+}
+trap cleanup EXIT
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+
+# set default values
+outFile="defaultOutFile"
+
+# arguments parsing
+OPTIONS=h
+LONGOPTS=help,internal
+
+! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    exit 2
+fi
+eval set -- "$PARSED"
+
+internal="false"
+
+while true; do
+    case "$1" in
+        -h|--help)
+			echo "<command description>"
+			echo "$0 <regex for pod name filter>"
+			echo ""
+			exit 1
+            ;;
+        --internal)
+			internal=true
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+
+
+if [[ "$internal" == "true" ]]; then
+	(( color=$RANDOM % 256 ))
+
+	pod="$1"
+
+	coloredPod="$(echo -e "\e[38;5;${color}m$pod\e[0m")"
+	escapedColoredPod="$(printf '%s\n' "$coloredPod" | sed -e 's/[\/&]/\\&/g')"
+
+	kubectl logs --since 48h -f "$pod" | sed -re "s,^(.*)\$,$escapedColoredPod: \1,"
+
+	exit 0
+fi
+
+# handle non-option arguments
+if [[ $# -ne 1 ]]; then
+    echo "$0: Please provide regex for pod name filter"
+	echo ""
+	echo "Use -h to see more info"
+    exit 4
+fi
+
+
 filter="$1"
 shift
 
-pods="$(kubectl get pods -o jsonpath="{range .items[*]}{.metadata.name}{'\n'}{end}" | grep "$filter")"
-readarray -t pods <<< "$pods"
+declare -A alreadyStarted
 
-read_containers() {
-	local pod="$1"
+while read pod; do
+	if [[ -v "alreadyStarted[$pod]" ]]; then
+		continue
+	fi
+	alreadyStarted[$pod]="true"
 
-	containers="$(kubectl get pod "$pod" -o "jsonpath={range .spec.containers[*]}{.name}{'\\n'}{end}" | grep -vF "istio-proxy")"
-	readarray -t containers <<< "$containers"
-}
+	"${BASH_SOURCE[0]}" --internal "${pod%% Running}" &
+done < <(kubectl get pods -w -o "jsonpath={.metadata.name}{' '}{.status.phase}{'\n'}" | grep --line-buffered "$filter" | grep --line-buffered -F " Running")
+
+wait
+
+#sleep infinity
 
 
-if (( ${#pods[@]} < 1 )); then
-	echo "No pods found"
-elif (( ${#pods[@]} == 1 )); then
+#read_containers() {
+#	local pod="$1"
+#
+#	containers="$(kubectl get pod "$pod" -o "jsonpath={range .spec.containers[*]}{.name}{'\\n'}{end}" | grep -vF "istio-proxy")"
+#	readarray -t containers <<< "$containers"
+#}
 
-	read_containers "${pods[0]}"
-
-	kubectl logs --since 48h -f "${pods[0]}" -c "${containers[0]}" "$@"
-else
-	for-all "${pods[@]}" -- kube-logs "{}" "$@"
-fi
+#if (( ${#pods[@]} < 1 )); then
+#	echo "No pods found"
+#elif (( ${#pods[@]} == 1 )); then
+#
+#	read_containers "${pods[0]}"
+#
+#	kubectl logs --since 48h -f "${pods[0]}" -c "${containers[0]}" "$@"
+#else
+#	for-all "${pods[@]}" -- kube-logs "{}" "$@"
+#fi
