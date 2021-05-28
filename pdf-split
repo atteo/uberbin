@@ -1,0 +1,23 @@
+#!/bin/bash
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0 <input_file>"
+	echo ""
+	echo "Splits PDF file into separate pages"
+	echo "Ex:"
+	echo "	$0 a.pdf"
+}
+
+if [[ "$1" == "--help" || "$1" == "-h" ]] || (( $# != 1 )); then
+	printHelp
+	exit 0
+fi
+
+requiresCommand pdftk
+
+pdftk "$1" burst

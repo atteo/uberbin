@@ -1,0 +1,33 @@
+#!/bin/bash
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+. $scriptDirectory/common_functions.sh
+
+printHelp() {
+	echo ""
+	echo "$0 <input_files...> <output_file>"
+	echo ""
+	echo "Merges several PDF files into one output file."
+	echo "Ex:"
+	echo "	$0 a.pdf b.pdf a_b.pdf"
+}
+
+if [[ "$1" == "--help" || "$1" == "-h" ]] || (( $# < 2 )); then
+	printHelp
+	exit 0
+fi
+
+
+requiresCommand pdftk
+
+outputFile="${@: -1}"
+
+if [[ -e "$outputFile" ]]; then
+	echo "Output file $outputFile already exists"
+	exit 1
+fi
+
+
+pdftk "${@:1:$#-1}" cat output "${outputFile}"
+
