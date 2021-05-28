@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -e
+
+expression="$1"
+
+host="$2"
+
+json='
+{
+  "apiVersion": "v1",
+  "spec": {
+	"hostIPC": true,
+	"hostNetwork": true,
+	"hostPID": true
+';
+
+if ! [[ -z "$host" ]]; then
+	json+=",
+	\"nodeSelector\" : {
+	  \"kubernetes.io/hostname\" : \"$host\"
+	}
+    ";
+fi
+
+json+='
+  }
+}
+'
+
+kubectl run --quiet -ti --image corfr/tcpdump --rm --privileged --restart=Never --overrides="$json" wireshark -- -i eth0 -w - "$expression" | wireshark -k -i -
+
