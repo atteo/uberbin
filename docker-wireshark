@@ -27,7 +27,7 @@ expression="${@:-port not 22}"
 
 id="$(uuidgen)"
 
-/usr/bin/docker run -l id="id=$id" -i --rm "--net=$network" --log-driver=none corfr/tcpdump -i "$interface" -w - "$expression" | wireshark -k -i -
+/usr/bin/docker run -l id="$id" -i --rm "--net=$network" --log-driver=none corfr/tcpdump -i "$interface" -w - "$expression" | wireshark -k -i -
 
 container="$(/usr/bin/docker ps -q --filter "label=id=$id")"
 
