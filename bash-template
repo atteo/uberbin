@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# temp directory
+tempDirectory=$(mktemp -d -t tmp.XXXXXXXXXX)
+function cleanup {
+  rm -rf "$tempDirectory"
+}
+trap cleanup EXIT
+
+# arguments parsing
+OPTIONS=hp
+LONGOPTS=help,parameters
+
+parameters="false"
+temporary="false"
+
+! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    exit 2
+fi
+eval set -- "$PARSED"
+
+while true; do
+    case "$1" in
+        -h|--help)
+			echo "<command description>"
+			echo "$0 [<optional arguments>] <required arguments>"
+			echo ""
+			echo "-p|--parameters - add parameter parsing logic"
+			exit 1
+            ;;
+        -p|--parameters)
+			parameters="true"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+
+# handle non-option arguments
+if [[ $# -ne 0 ]]; then
+	echo ""
+	echo "Use -h to see more info"
+    exit 4
+fi
+
+cat "$scriptDirectory/bash-template-essential.sh"
+
+if [[ "$temporary" == "true" ]]; then
+	cat "$scriptDirectory/bash-template-temporary.sh"
+fi
+
+if [[ "$parameters" == "true" ]]; then
+	cat "$scriptDirectory/bash-template-parameters.sh"
+fi
