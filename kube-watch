@@ -1,6 +1,8 @@
 #!/bin/bash
 
-set -e 
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
 
 green='\033[0;32m'
 reset='\033[0m'
