@@ -1,10 +1,82 @@
 #!/bin/bash
 
-set -e
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
 
-expression="$1"
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-host="$2"
+
+printHelp() {
+	echo "Capture traffic from Kubernetes cluster and forard it to local Wireshark"
+	echo "$0 [-e <expression> ] <host>"
+	echo ""
+	echo "-e|--expression <expression> - tcpdump like expression to filter traffic"
+}
+
+# default values
+expression="not port 22"
+pod=""
+
+# arguments parsing
+OPTIONS=he:p:
+LONGOPTS=help,expression:,host:,pod:
+
+! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    exit 2
+fi
+eval set -- "$PARSED"
+
+while true; do
+    case "$1" in
+        -h|--help)
+			printHelp
+			exit 1
+            ;;
+        -e|--expression)
+            expression="$2"
+            shift 2
+            ;;
+		-p|--pod)
+			pod="$2"
+			shift 2
+			;;
+		--host)
+			host="$2"
+			shift 2
+			;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+
+# handle non-option arguments
+if [[ $# -ne 0 ]]; then
+	echo "Error: Arguments required"
+	echo ""
+	printHelp
+    exit 4
+fi
+
+if (( $# > 0 )); then
+	expression="$1"
+fi
+
+if [[ -n "$pod" ]]; then
+	# catch traffic from pod
+	kubectl debug -i --image corfr/tcpdump "$pod" -c "tcpdump-$RANDOM" -- tcpdump -i any -w - "$expression" #| wireshark -k -i -
+	exit
+fi
+
+
+# catch traffic on host
 
 json='
 {

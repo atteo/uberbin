@@ -31,7 +31,7 @@ chmod 600 "$configFile"
 serverLine="$(cat "$configFile" | grep -F "server:")"
 remoteServer="${serverLine##*https://}"
 
-randomPort="$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')"
+randomPort="$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')"
 
 sed -rie "s,server:.*$,server: https://127.0.0.1:$randomPort,;s,certificate-authority-data:.*\$,insecure-skip-tls-verify: true," "$configFile"
 

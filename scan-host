@@ -19,4 +19,4 @@ if (( $# != 1 )); then
 fi
 
 requiresCommand nmap
-nmap -Pn "$@"
+nmap -p0-65535 -Pn "$@"

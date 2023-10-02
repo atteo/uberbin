@@ -8,4 +8,4 @@ shift
 
 expression="${@:-port not 22}"
 
-ssh "$host" "sudo tcpdump -i any -w - \"$expression\"" | wireshark -k -i -
+ssh "$host" "sudo tcpdump -i br0 -w - \"$expression\"" | wireshark -k -i -
