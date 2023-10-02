@@ -17,5 +17,11 @@ if (( $# != 0 )); then
 fi
 
 requiresCommand xclip
+requiresCommand wl-copy
+
+if [[ "$XDG_SESSION_TYPE" == "wayland" ]]; then
+    wl-copy
+    exit 0
+fi
 
 xclip -selection c

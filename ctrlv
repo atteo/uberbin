@@ -5,17 +5,22 @@ scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $scriptDirectory/common_functions.sh
 
 printHelp() {
-	echo ""
-	echo "$0"
-	echo ""
-	echo "Sends content of the clipboard to standard output."
+    echo ""
+    echo "$0"
+    echo ""
+    echo "Sends content of the clipboard to standard output."
 }
 
 if (( $# != 0 )); then
-	printHelp
-	exit 0
+    printHelp
+    exit 0
 fi
 
-requiresCommand xclip
+requiresCommand xclip wl-paste
+
+if [[ "$XDG_SESSION_TYPE" == "wayland" ]]; then
+    wl-paste -n
+    exit 0
+fi
 
 xclip -selection c -o
