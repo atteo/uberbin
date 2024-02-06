@@ -1,0 +1,136 @@
+#!/bin/bash
+
+# More safety, by turning some bugs into errors.
+set -euCo pipefail
+IFS=$'\n\t'
+
+printHelp() {
+	echo "<command description>"
+	echo "$0 [<optional arguments>] <required arguments>"
+	echo ""
+	echo "--region file - description"
+  echo "--list - list all clusters"
+}
+
+# default values
+region=""
+list="false"
+role=""
+
+# arguments parsing
+OPTIONS=h:
+LONGOPTS=help,list,region:,role:
+
+! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    exit 2
+fi
+eval set -- "$PARSED"
+
+while true; do
+    case "$1" in
+        -h|--help)
+			printHelp
+			exit 1
+            ;;
+        --region)
+            region="$2"
+            shift 2
+            ;;
+        --role)
+            role="$2"
+            shift 2
+            ;;
+        --list)
+            list="true"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+
+function cleanup() {
+	rm "$configFile" > /dev/null 2>&1 || true
+	rmdir "$tempDirectory" > /dev/null 2>&1 || true
+}
+
+trap "cleanup" EXIT
+
+tempDirectory="$(mktemp -d)"
+configFile="$tempDirectory/config"
+
+printAllEksClusters() {
+  allRegions="$(aws ec2 describe-regions --query 'Regions[].RegionName' | jq -r .[])"
+
+  for region in $allRegions; do
+    clusters="$(aws eks list-clusters --region "$region" --output json | jq -r '.clusters[]')"
+    if [ -n "$clusters" ]; then
+      echo "Region $region has clusters: $clusters"
+    fi
+  done
+  exit 1
+}
+
+if [[ "$list" == "true" ]]; then
+  printAllEksClusters
+  exit 0
+fi
+
+if [[ -z "$region" ]]; then
+  region="$(aws configure get region)"
+fi
+
+if [[ -z "${1-}" ]]; then
+  clusters="$(aws eks list-clusters --region "$region" --output json | jq -r '.clusters[]')"
+
+  if [[ -z "$clusters" ]]; then
+    echo >&2 "No EKS clusters found"
+    exit 1
+  fi
+
+  clusterCount="$(echo "$clusters" | wc -l)"
+
+  if [[ "$clusterCount" == 1 ]]; then
+    cluster="$(echo "$clusters" | head -n 1)"
+  else
+    echo >&2 "Please select cluster. Multiple EKS clusters available: $(echo "$clusters" | tr ' ' ',')."
+    echo >&2 "Usage: $0 [<cluster>]"
+    exit 1
+  fi
+else
+  cluster="$1"
+  shift
+fi
+
+function getRole() {
+  local clusterRoleName="AWS_EKS_ROLE_${cluster^^}"
+
+  if [[ -n "$role" ]]; then
+    echo "$role"
+  elif [[ -n "${!clusterRoleName:-}" ]]; then
+    echo "${!clusterRoleName}"
+  elif [[ -n "${AWS_EKS_ROLE-}" ]]; then
+    echo "$AWS_EKS_ROLE"
+  fi
+}
+
+role="$(getRole)"
+
+aws eks update-kubeconfig --name "$cluster" --region "$region" --kubeconfig "$configFile" ${role:+--role-arn} ${role:+$role}
+
+export KUBECONFIG="$configFile"
+export DOCKER_MACHINE_NAME="k8s:$cluster"
+
+if [[ -z "${1-}" ]]; then
+	fish
+else
+	"$@"
+fi
+
