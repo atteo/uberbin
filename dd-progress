@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [[ ! -z "$1" ]]; then
+	echo ""
+	echo "$0"
+	echo ""
+	echo "Forces all running dd commands to print its progress"
+	echo ""
+	echo "Usage:"
+	echo "$0"
+	exit 0
+fi
+
+kill -USR1 $(pgrep '^dd$')

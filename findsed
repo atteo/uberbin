@@ -1,0 +1,27 @@
+#!/bin/bash
+
+trap "exit 1" ERR SIGINT SIGTERM
+
+if (( $# <= 2 )); then
+	echo "Execute given SED command in every file matching given pattern"
+	echo ""
+	echo "Usage:"
+	echo "   $0   <sed_command>  <file_pattern_for_find>"
+	echo "Example:"
+	echo "   $0   's,first,second,g' -name \*.txt"
+	exit 1
+fi
+
+SED_PATTERN="$1"
+shift
+
+find . "$@" -a -not -regex ".*/target/.*" -print0  | while read -d $'\0' file
+do
+	echo "$file"
+
+	sed -i'' -re"${SED_PATTERN}"  "${file}" || exit 1
+	#mv -f "${file}.after_sed_editing" "$file"
+done
+
+wait
+

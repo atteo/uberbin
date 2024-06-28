@@ -1,0 +1,25 @@
+#!/bin/bash
+
+trap "exit 1" ERR SIGINT SIGTERM
+
+if (( $# <= 2 )); then
+	echo "Find given GREP pattern in every file matching given pattern"
+	echo ""
+	echo "Usage:"
+	echo "   $0   <grep_pattern>  <file_pattern_for_find>"
+	echo "Example:"
+	echo "   $0   'test.*2' -name \*.txt"
+	exit 1
+fi
+
+GREP_PATTERN="$1"
+shift
+
+find . "$@" -a -not -regex ".*/target/.*" -print0  | while read -d $'\0' file
+#find . "$@" -print0  | while read -d $'\0' file
+do
+	grep -l -E "${GREP_PATTERN}" "$file" 
+done
+
+wait
+

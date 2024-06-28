@@ -1,0 +1,5 @@
+#!/bin/bash
+
+container="$1"
+
+docker run -ti --rm --network container:$container --ipc container:$container --pid container:$container ubuntu bash

@@ -1,0 +1,2 @@
+#!/bin/bash
+find . -not \( -name .svn -prune -o -name .git -prune -o -name target -prune \) -type f \( -name \*.xml -o -name \*.java -o -name \*.c -o -name \*.html -o -name \*.css -o -name \*.js -o -name \*.sh -o -name \*.txt -o -name \*.py -o -name \*.rb -o -name \*.yml -o -name \*.coffee \) -print0 | xargs -0 sed -i -re "s/[[:blank:]]*$//"

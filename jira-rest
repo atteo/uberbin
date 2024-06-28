@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -eu
+set -o pipefail
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+. "$scriptDirectory"/.jira
+
+if [[ -z "$user" ]] || [[ -z "$password" ]]; then
+	echo >&2 "Missing user or password. Please set user and password properyt in .jira file"
+	exit 1
+fi
+
+path="$1"
+
+result="$(curl -u "$user:$password" "${jiraUrl}${path}")"
+
+echo "$result" | json-format

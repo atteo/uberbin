@@ -1,0 +1,3 @@
+#!/bin/bash
+
+find -type f -print0 | xargs -r0 stat -c "%y %n" | sort -r | head

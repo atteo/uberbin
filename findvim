@@ -1,0 +1,19 @@
+#!/bin/bash
+
+trap "exit 1" ERR SIGINT SIGTERM
+
+if (( $# <= 2 )); then
+	echo "Execute given VIM command in every file matching given pattern"
+	echo ""
+	echo "Usage:"
+	echo "   $0   <vim_command>  <file_pattern_for_find>"
+	echo "Example:"
+	echo "   $0   '%s,first,second,' -name \*.txt"
+	exit 1
+fi
+
+VIM_PATTERN="$1"
+shift
+
+find . "$@" -a -not -regex ".*/target/.*" -print0 | xargs -0 vim -T xterm -X +"argdo ${VIM_PATTERN} | update" +'q' --
+

@@ -1,0 +1,60 @@
+#!/bin/bash
+
+set -e
+
+BEGINNING_OF_MONTH="$(date +"%Y-%m")-01"
+SINCE="${1:-$BEGINNING_OF_MONTH}"
+
+if [[ "$1" == "--help" ]]; then
+    echo "usage: $0 [--fetch]"
+    echo "  --fetch fetch new changes from repository before accessing git log"
+    exit 1
+fi
+
+if [[ "$1" == "--fetch" ]]; then
+    fetch=1
+fi
+
+
+getGitRepositories() {
+	find -L . -maxdepth 7 -type d -name .git | sed -r 's,/[^/]+$,,'
+}
+
+
+fetchAll() {
+	getGitRepositories | while IFS= read -r repository;  do
+		echo "Fetching $repository"
+		git -C "$repository" fetch
+    done
+}
+
+changes() {
+	getGitRepositories | while IFS= read -r repository;  do
+        # if ! git -C "$repository" show-ref --verify --quiet refs/remotes/origin/master; then
+		# 	continue
+		# fi
+
+		formattedRepositoryName="$(printf '%-40s' "${repository##./}")"
+
+
+		local author
+		author="$(git -C "$repository" config user.email)" || continue
+
+		if [[ -z "$author" ]]; then
+			continue
+		fi
+
+		git -C "$repository" log --since="$SINCE" --author="$author" --pretty="format:%ci|$formattedRepositoryName|%s%n" --all
+	done | sed -re '/^$/d'
+}
+
+if [[ $fetch ]]; then
+    fetchAll
+fi
+
+changes
+
+changesFiltered() {
+    changes | grep -E '[A-Z]{2,5}-' | sed -E 's,^([[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2})[^|]*\|(Revert ")?([A-Z]{2\,5}-[[:digit:]]+).*$,\1 \3,g' | sort | uniq -c
+}
+

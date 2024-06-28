@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "Removing: "
+find . -depth -empty -type d -exec echo "{}" \;
+find . -depth -empty -type d -exec rmdir "{}" \;

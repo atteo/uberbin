@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -eu
+set -o pipefail
+
+scriptDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+ticket="$1"
+
+if [[ -z "$ticket" ]]; then
+	echo >&2 "Please provide ticket name"
+	exit 1
+fi
+
+"$scriptDirectory/jira-rest" "/rest/api/2/issue/$ticket/transitions"
+

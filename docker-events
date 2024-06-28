@@ -1,0 +1,89 @@
+#!/bin/bash
+
+jqProgram="$(cat <<EOF
+
+#. | select(.Action | startswith("exec_start") or startswith("exec_die") or startswith("exec_create") | not)
+
+def filterOutNotImportant: select(.Action | startswith("exec_start") or startswith("exec_die") or startswith("exec_create") | not);
+#def filterOutNotImportant: .;
+
+def printUpdate : "update " + .Type + " " + .Actor.Attributes.name + " state: " + .Acot.Attributes.updatestate.new;
+def printDelete : "delete " + .Actor.Attributes.name; 
+def printTag : "tag " + .Actor.Attributes.name + " " + .Actor.ID;
+def printUntag : "untag " + .Actor.Attributes.name;
+def printPush : "push " + .Actor.Attributes.name;
+def printExecStart : "exec_start " + .Actor.Attributes.name + " " + .Action;
+def printExecDie : "exec_die " + .Actor.Attributes.name + " exitCode=" + .Actor.Attributes.exitCode;
+def printExecCreate : "exec_create " + .Actor.Attributes.name + " " + .Action;
+def printLoad : "load " + .Type + " " + .Actor.Attributes.name;
+def printCreate : "create " + .Type + " " + .Actor.Attributes.name + " git:" + .Actor.Attributes["git.commit"];
+def printKill : "kill -" + .Actor.Attributes.signal + " " + .Type + " " + .Actor.Attributes.name + " git:" + .Actor.Attributes["git.commit"];
+def printDestroy : "destroy " + .Type + " " + .Actor.Attributes.name + " git:" + .Actor.Attributes["git.commit"];
+def printDie : "die " + .Type + " " + .Actor.Attributes.name + " git:" + .Actor.Attributes["git.commit"] + " exitCode:" + .Actor.Attributes.exitCode;
+def printConnect : "connect " + .Type + " " + .Actor.Attributes.name + " " + .Actor.Attributes.type + " for container: " + .Actor.Attributes.container; 
+def printDisconnect : "disconnect " + .Type + " " + .Actor.Attributes.name + " " + .Actor.Attributes.type + " for container: " + .Actor.Attributes.container; 
+def printStart : "start " + .Type + " " + .Actor.Attributes.name + " git:" + .Actor.Attributes["git.commit"];
+def printStop : "stop " + .Type + " " + .Actor.Attributes.name + " git:" + .Actor.Attributes["git.commit"];
+def printHealthStatus : .Action + " " + .Type + " " + .Actor.Attributes.name;
+def printRemove : .Action + " " + .Type + " " + .Actor.Attributes.name ;
+def printMount : .Action + " " + .Type + " " + .Actor.ID + " for container: " + .Actor.Attributes.container; 
+def printUnmount : .Action + " " + .Type + " " + .Actor.ID + " for container: " + .Actor.Attributes.container; 
+
+
+def printAction: if .Action == "update" then
+	printUpdate
+elif .Action == "delete" then
+	printDelete
+elif .Action == "tag" then
+	printTag
+elif .Action == "untag" then
+	printUntag
+elif .Action == "push" then
+	printPush
+elif .Action | startswith("exec_start") then
+	printExecStart
+elif .Action | startswith("exec_die") then
+	printExecDie
+elif .Action | startswith("exec_create") then
+	printExecCreate
+elif .Action == "load" then
+	printLoad
+elif .Action == "create" then
+	printCreate
+elif .Action == "kill" then
+	printKill
+elif .Action == "destroy" then
+	printDestroy
+elif .Action == "die" then
+	printDie
+elif .Action == "connect" then
+	printConnect
+elif .Action == "disconnect" then
+	printDisconnect
+elif .Action == "start" then
+	printStart
+elif .Action == "stop" then
+	printStop
+elif .Action == "remove" then
+	printRemove
+elif .Action == "mount" then
+	printMount
+elif .Action == "unmount" then
+	printUnmount
+elif .Action | startswith("health_status:") then
+	printHealthStatus
+else
+	"Unknown action: " + .Action + " , content: " + (. | tostring)
+end;
+
+
+filterOutNotImportant | ( .time | gmtime | todateiso8601 ) + " " + printAction
+
+
+EOF
+)"
+
+
+docker events --format "{{ json . }}" "$@" | while read line; do
+	echo $line | jq -r "$jqProgram"
+done
