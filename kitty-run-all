@@ -67,7 +67,7 @@ def main():
         if commands[i] == "|":
             i += 1
             if close_on_success:
-                wrapped = f'{commands[i]} && echo "Command successful, closing window in 5 seconds" && sleep 5 && kitty @ close-window --self'
+                wrapped = f'{commands[i]} && echo (set_color green)"Command successful, closing window in 10 seconds"(set_color normal) && sleep 10 && kitty @ close-window --self'
             else:
                 wrapped = commands[i]
 
@@ -77,7 +77,7 @@ def main():
             window_ids[win-1] = new_window
         else:
             if close_on_success:
-                wrapped = f'{commands[i]} && echo "Command successful, closing window in 5 seconds" && sleep 5 && kitty @ close-window --self'
+                wrapped = f'{commands[i]} && echo (set_color green)"Command successful, closing window in 10 seconds"(set_color normal) && sleep 10 && kitty @ close-window --self'
             else:
                 wrapped = commands[i]
 
