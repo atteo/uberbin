@@ -3,17 +3,24 @@
 import os
 import sys
 import subprocess
+import argparse
 
 def main():
-    close_on_success = '--close-on-success' in sys.argv
-    if close_on_success:
-        sys.argv.remove('--close-on-success')
+    parser = argparse.ArgumentParser(
+        prog='kitty-run-all',
+        description="Run multiple commands in split Kitty windows.\n"
+                    "Use '|' before a command to create a vertical split instead of the default horizontal split.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        usage="%(prog)s [options] <command1> [| <command2>] <command3> ..."
+    )
+    parser.add_argument('--close-on-success', action='store_true',
+                        help="Close the window after successful command execution (with a 5-second delay)")
+    parser.add_argument('commands', nargs='+',
+                        help="Commands to run")
+    args = parser.parse_args()
 
-    if len(sys.argv) < 2:
-        print("Usage: python kitty-run-all.py [--close-on-success] <command1> <command2> ... <commandN>")
-        sys.exit(1)
-
-    commands = sys.argv[1:]
+    close_on_success = args.close_on_success
+    commands = args.commands
 
     # Get the current Kitty window ID
     current_window = os.environ.get("KITTY_WINDOW_ID")
