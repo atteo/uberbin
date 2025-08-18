@@ -87,19 +87,7 @@ def main():
     ])
 
     # Run the first command in the current window
-    if close_on_success:
-        import time
-        ret = subprocess.run(["fish", "-c", commands[0]]).returncode
-        if ret == 0:
-            print("Command successful, closing window in 5 seconds")
-            try:
-                time.sleep(5)
-            except KeyboardInterrupt:
-                pass
-            else:
-                subprocess.run(["kitty", "@", "close-window", "--self"])
-    else:
-        subprocess.run(["fish", "-c", commands[0]])
+    subprocess.run(["fish", "-c", commands[0]])
 
 if __name__ == "__main__":
     main()
