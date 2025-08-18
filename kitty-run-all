@@ -59,13 +59,23 @@ def main():
     while i < len(commands):
         if commands[i] == "|":
             i += 1
+            if close_on_success:
+                wrapped = f'{commands[i]} && echo "Command successful, closing window in 5 seconds" && sleep 5 && kitty @ close-window --self'
+            else:
+                wrapped = commands[i]
+
             new_window = subprocess.check_output([
                 "kitty", "@", "launch", "--type=window", "--cwd", os.getcwd(),
-                "--hold", "--location=vsplit", f"--next-to=id:{window_ids[win-1]}", "fish", "-c", f"{commands[i]}\n"])
+                "--hold", "--location=vsplit", f"--next-to=id:{window_ids[win-1]}", "fish", "-c", f"{wrapped}\n"])
             window_ids[win-1] = new_window
         else:
+            if close_on_success:
+                wrapped = f'{commands[i]} && echo "Command successful, closing window in 5 seconds" && sleep 5 && kitty @ close-window --self'
+            else:
+                wrapped = commands[i]
+
             subprocess.run([
-                "kitty", "@", "send-text", "--match", f"id:{window_ids[win]}", f"{commands[i]}\n"
+                "kitty", "@", "send-text", "--match", f"id:{window_ids[win]}", f"{wrapped}\n"
             ])
             win += 1
 
