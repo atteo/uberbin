@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import json
 import os
-import sys
 import subprocess
+import sys
+import time
 import argparse
 
 def parse_spec(args, parser) -> list[list[str]]:
@@ -94,6 +96,68 @@ def get_current_window() -> str:
     return current_window
 
 
+def collect_window_ids_for_wait(windows: list[list[str]], current_window: str) -> set[str]:
+    ids: set[str] = set()
+    for row in windows:
+        for window_id in row:
+            if window_id != current_window:
+                ids.add(window_id)
+    return ids
+
+
+def list_current_window_ids() -> set[str] | None:
+    try:
+        result = subprocess.run([
+            "kitty", "@", "ls"
+        ], capture_output=True, text=True)
+    except OSError:
+        return None
+
+    if result.returncode != 0 or not result.stdout:
+        return None
+
+    try:
+        windows_info = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    ids: set[str] = set()
+    for os_window in windows_info:
+        for tab in os_window.get("tabs", []):
+            for window in tab.get("windows", []):
+                window_id = window.get("id")
+                if window_id is not None:
+                    ids.add(str(window_id))
+    return ids
+
+
+def wait_for_windows(window_ids: set[str]) -> None:
+    remaining = set(window_ids)
+    if not remaining:
+        return
+
+    last_count = -1
+    try:
+        while remaining:
+            current_ids = list_current_window_ids()
+            if current_ids is None:
+                print("Warning: unable to query kitty windows, skipping wait.", file=sys.stderr)
+                break
+
+            remaining &= current_ids
+            count = len(remaining)
+            if count and count != last_count:
+                plural = "" if count == 1 else "s"
+                print(f"Waiting for {count} window{plural} to close...", end='\r', flush=True)
+                last_count = count
+
+            if remaining:
+                time.sleep(0.5)
+    finally:
+        if last_count != -1:
+            print()
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog='kitty-run-all',
@@ -104,6 +168,8 @@ def main():
     )
     parser.add_argument('--close-on-success', action='store_true',
                         help="Close the window after successful command execution (with a 5-second delay)")
+    parser.add_argument('--wait', action='store_true',
+                        help="Wait for all commands to finish before returning")
     parser.add_argument('commands', nargs='+',
                         help="Commands to run")
     args = parser.parse_args()
@@ -117,11 +183,17 @@ def main():
     windows = create_windows(close_on_success, commands, current_window)
 
     create_horizontal_windows(close_on_success, commands, windows)
+    windows_to_wait: set[str] | None = None
+    if args.wait:
+        windows_to_wait = collect_window_ids_for_wait(windows, current_window)
 
     focus_window(current_window)
 
     # Run the first command in the current window
     subprocess.run(["fish", "-c", wrap_command(False, commands[0][0])])
+
+    if args.wait and windows_to_wait:
+        wait_for_windows(windows_to_wait)
 
 
 if __name__ == "__main__":
