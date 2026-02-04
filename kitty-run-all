@@ -1,11 +1,31 @@
 #!/usr/bin/env python
+from __future__ import annotations
 
+import argparse
 import json
 import os
+import queue
+import secrets
+import shlex
+import socket
 import subprocess
 import sys
+import tempfile
+import threading
 import time
-import argparse
+
+SCRIPT_PATH = os.path.realpath(__file__)
+ACK_USER_VAR = "KITTY_RUN_ALL_ACK"
+
+def _ipc_env_prefix(ipc_server) -> str:
+    return (f"KITTY_RUN_ALL_IPC_SOCKET={shlex.quote(ipc_server.socket_path)} "
+            f"KITTY_RUN_ALL_IPC_TOKEN={shlex.quote(ipc_server.token)}")
+
+
+def wrap_command(command, ipc_server) -> str:
+    prefix = _ipc_env_prefix(ipc_server)
+    return (f"{command}; set -l exit_code $status; "
+            f"{prefix} {shlex.quote(SCRIPT_PATH)} --call-from-separate-window $exit_code")
 
 def parse_spec(args, parser) -> list[list[str]]:
     if args.commands[0] == "\\":
@@ -33,12 +53,115 @@ def parse_spec(args, parser) -> list[list[str]]:
         parser.error("Invalid command list: trailing '\\' is not allowed")
     return command_rows
 
+class IpcServer:
+    def __init__(self):
+        self._tempdir = tempfile.TemporaryDirectory(prefix="kitty-run-all-")
+        self.socket_path = os.path.join(self._tempdir.name, "ipc.sock")
+        self.token = secrets.token_hex(16)
+        self._notify_queue: queue.Queue[dict[str, object]] = queue.Queue()
+        self._stop_event = threading.Event()
+        self._listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            self._listener.bind(self.socket_path)
+            self._listener.listen()
+        except OSError:
+            self._tempdir.cleanup()
+            raise
+        self._worker = threading.Thread(target=self._serve, daemon=True)
+        self._worker.start()
 
-def wrap_command(command) -> str:
-    return command
+    def _serve(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                conn, _ = self._listener.accept()
+            except OSError:
+                break
+            threading.Thread(target=self._handle_connection, args=(conn,), daemon=True).start()
+
+    def _handle_connection(self, conn: socket.socket) -> None:
+        with conn:
+            data = b""
+            while not data.endswith(b"\n"):
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            if not data:
+                return
+            try:
+                payload = json.loads(data.decode())
+            except json.JSONDecodeError:
+                return
+            if payload.get("token") != self.token:
+                return
+            window_id = payload.get("window_id")
+
+            self._notify_queue.put({
+                "window_id": window_id,
+                "status": payload.get("status"),
+                "pid": payload.get("pid"),
+                "timestamp": payload.get("timestamp")
+            })
+
+    def drain_notifications(self) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        while True:
+            try:
+                entries.append(self._notify_queue.get_nowait())
+            except queue.Empty:
+                break
+        return entries
+
+    def read_notification(self) -> dict[str, object] | None:
+        try:
+            return self._notify_queue.get(timeout=1.0)
+        except queue.Empty:
+            return None
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        try:
+            self._listener.close()
+        except OSError:
+            pass
+        self._worker.join(timeout=1)
+        self._tempdir.cleanup()
 
 
-def create_windows(commands, current_window) -> tuple[list[list[str]], dict[str, str]]:
+def notify_parent(exit_code: int) -> None:
+    socket_path = os.environ.get("KITTY_RUN_ALL_IPC_SOCKET")
+    token = os.environ.get("KITTY_RUN_ALL_IPC_TOKEN")
+    if not socket_path or not token:
+        return
+    payload = json.dumps({
+        "type": "done",
+        "token": token,
+        "window_id": os.environ.get("KITTY_WINDOW_ID"),
+        "status": exit_code,
+        "pid": os.getpid(),
+        "timestamp": time.time()
+    })
+    notified = False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(socket_path)
+            sock.sendall(payload.encode() + b"\n")
+            notified = True
+    except OSError as exc:
+        print(f"Warning: IPC handshake failed: {exc}", file=sys.stderr)
+    window_id = os.environ.get("KITTY_WINDOW_ID")
+    if notified and window_id:
+        wait_for_window_ack(window_id, token)
+
+def launch_command_in_new_window(location, next_to, command) -> str:
+    new_window = subprocess.check_output([
+        "kitty", "@", "launch", "--type=window", "--cwd", os.getcwd(), "--dont-take-focus",
+        f"--location={location}", f"--next-to=id:{next_to}", "fish", "-c" f"{command}"]
+    ).strip().decode('utf-8')
+
+    return new_window
+
+def create_windows(commands, current_window, ipc_server) -> tuple[list[list[str]], dict[str, str]]:
     # Initialize the list of windows with the current window
     window_rows = [[current_window]]
     command_map: dict[str, str] = {}
@@ -49,7 +172,7 @@ def create_windows(commands, current_window) -> tuple[list[list[str]], dict[str,
         if row_index == 0:
             continue
 
-        wrapped = wrap_command(commands_in_row[0])
+        wrapped = wrap_command(commands_in_row[0], ipc_server)
 
         new_window = launch_command_in_new_window("hsplit", window_rows[row_index-1][0], wrapped)
 
@@ -57,22 +180,12 @@ def create_windows(commands, current_window) -> tuple[list[list[str]], dict[str,
         command_map[new_window] = commands_in_row[0]
     return window_rows, command_map
 
-
-def launch_command_in_new_window(location, next_to, command) -> str:
-    new_window = subprocess.check_output([
-        "kitty", "@", "launch", "--type=window", "--cwd", os.getcwd(), "--dont-take-focus",
-        f"--location={location}", f"--next-to=id:{next_to}", "fish", "-c" f"{command}"]
-    ).strip().decode('utf-8')
-
-    return new_window
-
-
-def create_horizontal_windows(commands, windows, command_map: dict[str, str]):
+def create_horizontal_windows(commands, windows, command_map: dict[str, str], ipc_server):
     for row_index, commands_in_row in enumerate(commands):
         windows_in_row = windows[row_index]
 
         for idx, command in enumerate(commands_in_row[1:]):
-            wrapped = wrap_command(command)
+            wrapped = wrap_command(command, ipc_server)
 
             new_window = launch_command_in_new_window("vsplit", windows_in_row[idx-1], wrapped)
 
@@ -129,7 +242,26 @@ def list_window_infos() -> dict[str, dict[str, object]] | None:
     return infos
 
 
-def get_window_output(window_id: str) -> str | None:
+def wait_for_window_ack(window_id: str, token: str, timeout: float = 60.0, interval: float = 0.25) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        infos = list_window_infos()
+        if infos is None:
+            print("Warning: unable to query kitty windows for ACK", file=sys.stderr)
+            return
+        entry = infos.get(window_id)
+        if entry:
+            user_vars = entry.get("user_vars")
+            if isinstance(user_vars, dict) and user_vars.get(ACK_USER_VAR) == token:
+                return
+        time.sleep(interval)
+    print(f"Warning: timed out waiting for ack on window {window_id}", file=sys.stderr)
+
+def print_window_output(window_id: str, command: str | None, status: int | None = None) -> None:
+    label = command or window_id
+    suffix = f" (exit {status})" if status is not None else ""
+    header = f"\x1b[32m=== Output from window '{label}'{suffix} ===\x1b[0m"
+    print(header)
     try:
         result = subprocess.run([
             "kitty", "@", "get-text",
@@ -137,22 +269,16 @@ def get_window_output(window_id: str) -> str | None:
             "--ansi", "--extent=last_cmd_output"
         ], capture_output=True, text=True)
     except OSError:
-        return None
+        print(f"Warning: failed to get output for window {window_id}", file=sys.stderr)
+        return
 
     if result.returncode != 0:
-        return None
+        print(f"Warning: failed to get output for window {window_id}: {result.stderr}", file=sys.stderr)
+        return
 
-    return result.stdout
-
-
-def print_window_output(window_id: str, command: str | None, output: str | None) -> None:
-    label = command or window_id
-    header = f"\x1b[32m=== Output from window {label} ===\x1b[0m"
-    print(f"\n{header}")
+    output = result.stdout
     if output:
         print(output, end="" if output.endswith("\n") else "\n")
-    else:
-        print("(no output captured)")
 
 
 def close_window(window_id: str) -> None:
@@ -161,72 +287,64 @@ def close_window(window_id: str) -> None:
     ])
 
 
-def wait_for_windows(window_ids: set[str], close_windows: bool, command_map: dict[str, str]) -> None:
+def set_window_user_var(window_id: str, key: str, value: str) -> None:
+    subprocess.run([
+        "kitty", "@", "set-user-vars",
+        f"--match=id:{window_id}", f"{key}={value}"
+    ], check=False)
+
+
+def acknowledge_window(window_id: str, token: str) -> None:
+    set_window_user_var(window_id, ACK_USER_VAR, token)
+
+
+def print_remaining_status(remaining) -> None:
+    count = len(remaining)
+    if not count:
+        return
+
+    plural = "" if count == 1 else "s"
+    message = f"Waiting for {count} window{plural} to close..."
+
+    print(message, end='\r', flush=True)
+
+def wait_for_windows(window_ids: set[str], close_windows: bool, command_map: dict[str, str], ipc_server: IpcServer | None = None) -> None:
     remaining = set(window_ids)
     if not remaining:
         return
 
-    last_count = -1
-    status_message = ""
-    window_output: dict[str, str | None] = {}
-    waiting_for_prompt: set[str] = set(window_ids)
-    printed: set[str] = set()
-    closing_windows: set[str] = set()
+    ack_token = ipc_server.token if ipc_server else None
+    acked_windows: set[str] = set()
+    printed_status = False
     try:
         while remaining:
+            entry = ipc_server.read_notification() if ipc_server else None
+            if entry:
+                window_id = entry.get("window_id")
+                status = entry.get("status")
+                if window_id:
+                    print_window_output(window_id, command_map.get(window_id), status if isinstance(status, int) else None)
+                    if ack_token and window_id not in acked_windows:
+                        acknowledge_window(window_id, ack_token)
+                        acked_windows.add(window_id)
+                        if close_windows:
+                            close_window(window_id)
+
             window_infos = list_window_infos()
             if window_infos is None:
                 print("Warning: unable to query kitty windows, skipping wait.", file=sys.stderr)
                 break
 
-            alive = remaining & set(window_infos.keys())
-
-            done_prompt = {wid for wid in waiting_for_prompt & alive if window_infos[wid].get("at_prompt")}
-            for window_id in done_prompt:
-                command = command_map.get(window_id)
-
-                output = get_window_output(window_id)
-                window_output[window_id] = output
-
-                if window_id not in printed:
-                    print_window_output(window_id, command, window_output.get(window_id))
-                    printed.add(window_id)
-                waiting_for_prompt.discard(window_id)
-                if close_windows and window_id not in closing_windows:
-                    close_window(window_id)
-                    closing_windows.add(window_id)
-                if not close_windows:
-                    remaining.discard(window_id)
-                if status_message:
-                    print(status_message, end='\r', flush=True)
-
-            missing = remaining - alive
-            for window_id in list(missing):
-                command = command_map.get(window_id)
-                if window_id not in printed:
-                    print_window_output(window_id, command, window_output.get(window_id))
-                    printed.add(window_id)
-                remaining.discard(window_id)
-                waiting_for_prompt.discard(window_id)
-                closing_windows.discard(window_id)
-                if status_message:
-                    print(status_message, end='\r', flush=True)
-
-            count = len(remaining)
-            if count:
-                plural = "" if count == 1 else "s"
-                message = f"Waiting for {count} window{plural} to close..."
-                if count != last_count:
-                    print(message, end='\r', flush=True)
-                    status_message = message
-                    last_count = count
-            else:
-                status_message = ""
+            closed_windows = {wid for wid in remaining if wid not in window_infos}
+            for wid in closed_windows:
+                remaining.remove(wid)
 
             if remaining:
+                print_remaining_status(remaining)
+                printed_status = True
                 time.sleep(0.5)
     finally:
-        if last_count != -1:
+        if printed_status:
             print()
 
 
@@ -242,30 +360,42 @@ def main():
                         help="Keep windows open instead of closing them automatically")
     parser.add_argument('--wait', action='store_true',
                         help="Wait for all commands to finish before returning")
-    parser.add_argument('commands', nargs='+',
+    parser.add_argument('--call-from-separate-window', type=int, nargs='?',
+                        const=0, help=argparse.SUPPRESS)
+    parser.add_argument('commands', nargs='*',
                         help="Commands to run")
     args = parser.parse_args()
+    if args.call_from_separate_window is not None:
+        notify_parent(args.call_from_separate_window)
+        sys.exit(args.call_from_separate_window)
+    if not args.commands:
+        parser.error("the following arguments are required: commands")
 
-    commands = parse_spec(args, parser)
+    ipc_server = IpcServer()
 
-    current_window = get_current_window()
+    try:
+        commands = parse_spec(args, parser)
 
-    windows, window_command_map = create_windows(commands, current_window)
+        current_window = get_current_window()
 
-    create_horizontal_windows(commands, windows, window_command_map)
-    windows_to_wait: set[str] | None = None
-    if args.wait:
-        windows_to_wait = collect_window_ids_for_wait(windows, current_window)
+        windows, window_command_map = create_windows(commands, current_window, ipc_server)
 
-    close_windows = not args.dont_close
+        create_horizontal_windows(commands, windows, window_command_map, ipc_server)
+        windows_to_wait: set[str] | None = None
+        if args.wait:
+            windows_to_wait = collect_window_ids_for_wait(windows, current_window)
 
-    focus_window(current_window)
+        close_windows = not args.dont_close
 
-    # Run the first command in the current window
-    subprocess.run(["fish", "-c", wrap_command(commands[0][0])])
+        focus_window(current_window)
 
-    if args.wait and windows_to_wait:
-        wait_for_windows(windows_to_wait, close_windows, window_command_map)
+        # Run the first command in the current window
+        subprocess.run(["fish", "-c", commands[0][0]])
+
+        if args.wait and windows_to_wait:
+            wait_for_windows(windows_to_wait, close_windows, window_command_map, ipc_server)
+    finally:
+        ipc_server.stop()
 
 
 if __name__ == "__main__":
