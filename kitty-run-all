@@ -242,7 +242,7 @@ def list_window_infos() -> dict[str, dict[str, object]] | None:
     return infos
 
 
-def wait_for_window_ack(window_id: str, token: str, timeout: float = 60.0, interval: float = 0.25) -> None:
+def wait_for_window_ack(window_id: str, token: str, timeout: float = 180.0, interval: float = 0.25) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
         infos = list_window_infos()
@@ -260,7 +260,9 @@ def wait_for_window_ack(window_id: str, token: str, timeout: float = 60.0, inter
 def print_window_output(window_id: str, command: str | None, status: int | None = None) -> None:
     label = command or window_id
     suffix = f" (exit {status})" if status is not None else ""
-    header = f"\x1b[32m=== Output from window '{label}'{suffix} ===\x1b[0m"
+    # Use red color for failures (non-zero status), green for success
+    color = "\x1b[31m" if status is not None and status != 0 else "\x1b[32m"
+    header = f"{color}=== Output from window '{label}'{suffix} ===\x1b[0m"
     print(header)
     try:
         result = subprocess.run([
@@ -308,13 +310,15 @@ def print_remaining_status(remaining) -> None:
 
     print(message, end='\r', flush=True)
 
-def wait_for_windows(window_ids: set[str], close_windows: bool, command_map: dict[str, str], ipc_server: IpcServer | None = None) -> None:
+def wait_for_windows(window_ids: set[str], close_windows: bool, command_map: dict[str, str], ipc_server: IpcServer | None = None) -> int:
     remaining = set(window_ids)
     if not remaining:
-        return
+        return 0
 
     ack_token = ipc_server.token if ipc_server else None
     acked_windows: set[str] = set()
+    failed_windows: list[tuple[str, str | None, int]] = []
+    first_failure_code: int | None = None
     printed_status = False
     try:
         while remaining:
@@ -323,12 +327,28 @@ def wait_for_windows(window_ids: set[str], close_windows: bool, command_map: dic
                 window_id = entry.get("window_id")
                 status = entry.get("status")
                 if window_id:
-                    print_window_output(window_id, command_map.get(window_id), status if isinstance(status, int) else None)
-                    if ack_token and window_id not in acked_windows:
-                        acknowledge_window(window_id, ack_token)
-                        acked_windows.add(window_id)
-                        if close_windows:
-                            close_window(window_id)
+                    exit_status = status if isinstance(status, int) else None
+                    command = command_map.get(window_id)
+                    
+                    # Check if command failed (non-zero exit status)
+                    if exit_status is not None and exit_status != 0:
+                        # Defer printing and acknowledging failed command outputs
+                        failed_windows.append((window_id, command, exit_status))
+                        # Track first failure
+                        if first_failure_code is None:
+                            first_failure_code = exit_status
+                    else:
+                        # Print successful command outputs immediately
+                        print_window_output(window_id, command, exit_status)
+                        
+                        if ack_token and window_id not in acked_windows:
+                            acknowledge_window(window_id, ack_token)
+                            acked_windows.add(window_id)
+                            
+                            # Close window immediately if it succeeded
+                            if close_windows:
+                                close_window(window_id)
+                    remaining.remove(window_id)
 
             window_infos = list_window_infos()
             if window_infos is None:
@@ -343,9 +363,20 @@ def wait_for_windows(window_ids: set[str], close_windows: bool, command_map: dic
                 print_remaining_status(remaining)
                 printed_status = True
                 time.sleep(0.5)
+        
+        # Print failed command outputs at the end
+        for window_id, command, exit_status in failed_windows:
+            print_window_output(window_id, command, exit_status)
+            if ack_token and window_id not in acked_windows:
+                acknowledge_window(window_id, ack_token)
+                acked_windows.add(window_id)
+            if close_windows:
+                close_window(window_id)
     finally:
         if printed_status:
             print()
+    
+    return first_failure_code or 0
 
 
 def main():
@@ -390,10 +421,18 @@ def main():
         focus_window(current_window)
 
         # Run the first command in the current window
-        subprocess.run(["fish", "-c", commands[0][0]])
+        result = subprocess.run(["fish", "-c", commands[0][0]])
+        current_window_exit_code = result.returncode
 
+        other_windows_exit_code = 0
         if args.wait and windows_to_wait:
-            wait_for_windows(windows_to_wait, close_windows, window_command_map, ipc_server)
+            other_windows_exit_code = wait_for_windows(windows_to_wait, close_windows, window_command_map, ipc_server)
+        
+        # Exit with error code if any command failed
+        # Prioritize current window's exit code if it failed
+        final_exit_code = current_window_exit_code if current_window_exit_code != 0 else other_windows_exit_code
+        if final_exit_code != 0:
+            sys.exit(final_exit_code)
     finally:
         ipc_server.stop()
 
